@@ -6,7 +6,7 @@ import {
   ProcessStepsSchema,
   computeMetrics,
   type ExtractResult,
-} from "@/lib/schema";
+} from "../schema.ts";
 
 const steps = ProcessStepsSchema.parse([
   {
