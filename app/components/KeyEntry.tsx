@@ -89,6 +89,11 @@ export function KeyEntry({
           </a>
         </p>
         <p>
+          Free models cost nothing but are less reliable — they sometimes miss
+          waiting time, which is the figure this tool exists to measure. For
+          results you intend to act on, name a paid model above.
+        </p>
+        <p>
           Your key is held in this browser tab only, sent with each analysis and
           never stored on the server. Your description is sent to {cfg.label}.
         </p>

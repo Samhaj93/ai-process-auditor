@@ -83,9 +83,13 @@ Do not add a database, auth, or state library until explicitly asked. A complete
 
 ## Current state
 
-Stage 1, part one done: `lib/schema.ts` is zod-backed, and the step table and flow efficiency render from `lib/fixtures/sample-extract.ts` with no key and no network.
+Stage 1 works end to end: prose in, validated steps and flow efficiency out, through . Default provider is OpenRouter on a free model. Stages 2–4 not started.
 
-Next: the extract route — prompt, `POST /api/extract`, prose length gate, key entry, and the provider verification pass that confirms the model IDs in `PROVIDERS` against a real call.
+## Cost constraint — strictly free
+
+The project stays free to run. Do not change the default to a paid model or add anything that needs one.
+
+Known consequence: free models sometimes return valid JSON with every wait time set to zero, which reads as 100% flow efficiency. The schema cannot catch this — it checks shape, not sense.  flags it, and the UI tells the user that a paid model, entered in the Model field, gives better results. Free OpenRouter keys are capped at 50 requests a day.
 
 ## Framework notes
 

@@ -166,7 +166,7 @@ export async function callModel<T>(opts: CallOptions): Promise<T> {
         res.status === 401
           ? "key rejected"
           : res.status === 429
-            ? "rate limited — the free model is busy, try again shortly"
+            ? "rate limited — free models are shared and capped per day. Wait a little, or add credit to raise the cap"
             : res.status === 402
               ? "out of credit"
               : "request failed";

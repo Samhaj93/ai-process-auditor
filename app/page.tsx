@@ -8,6 +8,7 @@ import { ProseInput } from "@/app/components/ProseInput";
 import { StepTable } from "@/app/components/StepTable";
 import { PROVIDERS, type ProviderId } from "@/lib/callModel";
 import { sampleExtract, sampleProcessName } from "@/lib/fixtures/sample-extract";
+import { auditWarnings } from "@/lib/quality";
 import type { ExtractResult } from "@/lib/schema";
 import { useSessionState } from "@/lib/useSessionState";
 
@@ -68,6 +69,8 @@ export default function Page() {
     setTitle(`${sampleProcessName} — worked example`);
   }
 
+  const warnings = result ? auditWarnings(result) : [];
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10">
       <header className="flex flex-col gap-1 border-b border-border pb-4">
@@ -125,6 +128,27 @@ export default function Page() {
               Download JSON
             </a>
           </div>
+          {warnings.length > 0 ? (
+            <section className="flex flex-col gap-2 border border-accent p-4">
+              <h2 className="text-[11px] uppercase tracking-wider text-accent">
+                Check this result
+              </h2>
+              <ul className="flex flex-col gap-1">
+                {warnings.map((w) => (
+                  <li key={w.code} className="text-sm">
+                    {w.message}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted">
+                Free models are markedly less consistent at this than paid ones
+                — in testing they dropped waiting time in roughly one run in
+                three. Run it again, add more detail about where work waits, or
+                put a paid model in the Model field above.
+              </p>
+            </section>
+          ) : null}
+
           <FlowEfficiency metrics={result.metrics} />
           <StepTable steps={result.steps} />
         </>
