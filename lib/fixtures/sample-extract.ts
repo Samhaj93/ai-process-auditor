@@ -1,0 +1,115 @@
+// A hand-written as-is process, used to build and check the UI with no key and
+// no network. Parsed through ProcessStepsSchema at module load, so a malformed
+// fixture fails loudly rather than rendering something plausible and wrong.
+
+import {
+  ProcessStepsSchema,
+  computeMetrics,
+  type ExtractResult,
+} from "@/lib/schema";
+
+const steps = ProcessStepsSchema.parse([
+  {
+    id: "s1-receive-invoice",
+    name: "Receive supplier invoice",
+    actor: "AP clerk",
+    processMinutes: 5,
+    waitMinutes: 0,
+    systems: ["email"],
+    valueClass: "business-non-value-add",
+    handoffTo: "s2-match-po",
+    reworkTo: null,
+    notes: "Arrives as a PDF attachment, no structured data.",
+  },
+  {
+    id: "s2-match-po",
+    name: "Match invoice to purchase order",
+    actor: "AP clerk",
+    processMinutes: 12,
+    waitMinutes: 240,
+    systems: ["SAP"],
+    valueClass: "business-non-value-add",
+    handoffTo: "s3-resolve-mismatch",
+    reworkTo: null,
+    notes: null,
+  },
+  {
+    id: "s3-resolve-mismatch",
+    name: "Resolve price or quantity mismatch",
+    actor: "AP clerk",
+    processMinutes: 25,
+    waitMinutes: 480,
+    systems: ["SAP", "email"],
+    valueClass: "non-value-add",
+    handoffTo: "s4-manager-approval",
+    reworkTo: "s2-match-po",
+    notes: "Roughly a third of invoices loop back here at least once.",
+  },
+  {
+    id: "s4-manager-approval",
+    name: "Cost centre manager approval",
+    actor: "Cost centre manager",
+    processMinutes: 6,
+    waitMinutes: 1440,
+    systems: ["SAP"],
+    valueClass: "business-non-value-add",
+    handoffTo: "s5-finance-review",
+    reworkTo: null,
+    notes: "Sits in an approval queue overnight as a rule.",
+  },
+  {
+    id: "s5-finance-review",
+    name: "Finance review above threshold",
+    actor: "Finance analyst",
+    processMinutes: 15,
+    waitMinutes: 360,
+    systems: ["SAP", "Excel"],
+    valueClass: "business-non-value-add",
+    handoffTo: "s6-payment-run",
+    reworkTo: null,
+    notes: null,
+  },
+  {
+    id: "s6-payment-run",
+    name: "Include in payment run",
+    actor: "AP clerk",
+    processMinutes: 8,
+    waitMinutes: 2880,
+    systems: ["SAP", "banking portal"],
+    valueClass: "value-add",
+    handoffTo: "s7-remittance-advice",
+    reworkTo: null,
+    notes: "Payment runs execute twice weekly.",
+  },
+  {
+    id: "s7-remittance-advice",
+    name: "Send remittance advice",
+    actor: "AP clerk",
+    processMinutes: 4,
+    waitMinutes: 60,
+    systems: ["email"],
+    valueClass: "value-add",
+    handoffTo: "s8-archive",
+    reworkTo: null,
+    notes: null,
+  },
+  {
+    id: "s8-archive",
+    name: "Archive supporting documents",
+    actor: "AP clerk",
+    processMinutes: 3,
+    waitMinutes: 120,
+    systems: ["SharePoint"],
+    valueClass: "non-value-add",
+    handoffTo: null,
+    reworkTo: null,
+    notes: "Duplicated in SAP and SharePoint.",
+  },
+]);
+
+export const sampleProcessName = "Supplier invoice approval";
+
+export const sampleExtract: ExtractResult = {
+  steps,
+  metrics: computeMetrics(steps),
+};

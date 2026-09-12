@@ -33,7 +33,7 @@ This repo is public on GitHub.
 
 All model access goes through one function: `callModel()` in `lib/callModel.ts`. Nothing else in the codebase imports a provider SDK or knows a provider exists.
 
-Supported providers use OpenAI-compatible chat completions. Adding one means adding a base URL and a model string to the registry — no new code paths.
+Most supported providers use OpenAI-compatible chat completions; adding one means adding a base URL and a model string to the registry — no new code paths. Anthropic is the exception and has its own request/response branch inside `callModel()`, because its Messages API is not OpenAI-compatible. Keep exceptions inside that one function; a second provider-aware file is a bug.
 
 ## The audit pipeline
 
@@ -68,7 +68,7 @@ Celonis-referenced: dense, data-forward, calm. The screen is an instrument panel
 
 ## Stack
 
-Next.js (App Router) · TypeScript · Tailwind · `bpmn-js` for BPMN rendering · deployed on Vercel.
+Next.js (App Router) · TypeScript · Tailwind · `zod` for runtime schema validation · `bpmn-js` for BPMN rendering · deployed on Vercel.
 
 Do not add a database, auth, or state library until explicitly asked. A completed audit lives in React state and can be downloaded as JSON.
 
@@ -78,11 +78,14 @@ Do not add a database, auth, or state library until explicitly asked. A complete
 - Commit after each slice that runs. Small commits, plain messages.
 - When a model response fails schema validation, surface the validation error to the user — never silently coerce or fill defaults.
 - Prefer deleting code to adding flags.
-- Don't add features, dependencies, or abstractions that weren't asked for. Propose them instead and wait.
+- Don't add features, dependencies, or abstractions that weren't asked for. Propose them instead and wait. `zod` is an approved exception: it is the mechanism that enforces the validation rule above, and TypeScript types alone cannot, since they are erased at runtime.
+- Schemas in `lib/schema.ts` are the source of truth; types are derived with `z.infer`. Never derive a schema from a refined one with `.pick()` or `.omit()` — on zod 4 that compiles and silently drops the refinements. Export the narrower schema standalone instead, as `ProcessStepsSchema` is.
 
 ## Current state
 
-Scaffold stage. Nothing built yet. Next step: stage 1 (extract) end-to-end with the UI rendering only the step table and flow efficiency.
+Stage 1, part one done: `lib/schema.ts` is zod-backed, and the step table and flow efficiency render from `lib/fixtures/sample-extract.ts` with no key and no network.
+
+Next: the extract route — prompt, `POST /api/extract`, prose length gate, key entry, and the provider verification pass that confirms the model IDs in `PROVIDERS` against a real call.
 
 ## Framework notes
 

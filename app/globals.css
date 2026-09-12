@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
+/* Dense, data-forward, calm. Neutral surfaces; one accent, reserved for
+   severity and delta. No gradients, no shadows. */
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #14171c;
+  --muted: #656d78;
+  --border: #e2e5e9;
+  --surface: #f7f8f9;
+  --accent: #b4530a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-surface: var(--surface);
+  --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0b0d10;
+    --foreground: #e6e9ed;
+    --muted: #8c95a1;
+    --border: #22272e;
+    --surface: #12151a;
+    --accent: #e08c3c;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
