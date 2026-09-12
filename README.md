@@ -14,8 +14,8 @@ It runs on your own machine and costs nothing. You bring your own free API key.
 ## Set up
 
 ```bash
-git clone <this-repo-url>
-cd process-auditor
+git clone https://github.com/Samhaj93/ai-process-auditor.git
+cd ai-process-auditor
 npm install
 npm run dev
 ```
@@ -77,3 +77,7 @@ npm run build
 - `lib/quality.ts`: flags results that pass the checks but look implausible
 
 Architecture rules and project decisions live in [CLAUDE.md](CLAUDE.md). Read it before changing anything.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
