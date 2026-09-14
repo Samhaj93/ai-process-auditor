@@ -14,6 +14,7 @@ import { sampleDiagnose } from "@/lib/fixtures/sample-diagnose";
 import { sampleExtract, sampleProcessName } from "@/lib/fixtures/sample-extract";
 import { sampleRedesign } from "@/lib/fixtures/sample-redesign";
 import { auditWarnings, diagnoseWarnings, redesignWarnings } from "@/lib/quality";
+import { MAX_SAVED_FILE_BYTES, buildSavedAudit, parseSavedAudit } from "@/lib/savedAudit";
 import type { DiagnoseResult, ExtractResult, ProcessStep, Redesign } from "@/lib/schema";
 import { useSessionState } from "@/lib/useSessionState";
 
@@ -30,6 +31,11 @@ type Stage<T> =
   | { status: "running" }
   | { status: "done"; result: T }
   | { status: "failed"; errors: string[] };
+
+interface Problem {
+  title: string;
+  lines: string[];
+}
 
 /** POST to a stage route. Returns the parsed body, or the errors to show. */
 async function postStage<T>(
@@ -71,14 +77,14 @@ export default function Page() {
   const [prose, setProse] = useState("");
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [title, setTitle] = useState<string | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
   const [diagnosis, setDiagnosis] = useState<Stage<DiagnoseResult>>({ status: "idle" });
   const [redesign, setRedesign] = useState<Stage<Redesign>>({ status: "idle" });
   const [bpmnXml, setBpmnXml] = useState<string | null>(null);
 
-  // Every analysis, example and retry gets a new id. A slow response from an
-  // earlier one is dropped, so it can never overwrite what is now on screen.
+  // Every analysis, example, file and retry gets a new id. A slow response from
+  // an earlier one is dropped, so it can never overwrite what is now on screen.
   const runId = useRef(0);
 
   function updateProvider(next: ProviderId) {
@@ -104,7 +110,7 @@ export default function Page() {
   async function analyse() {
     const id = ++runId.current;
     setBusy(true);
-    setErrors([]);
+    setProblem(null);
     setResult(null);
     setTitle(null);
     setDiagnosis({ status: "idle" });
@@ -120,7 +126,7 @@ export default function Page() {
     if (runId.current !== id) return;
     setBusy(false);
     if (!res.ok) {
-      setErrors(res.errors);
+      setProblem({ title: "Analysis rejected", lines: res.errors });
       return;
     }
     setResult(res.data);
@@ -154,15 +160,52 @@ export default function Page() {
     );
   }
 
+  function show(saved: { extract: ExtractResult; diagnosis: DiagnoseResult | null; redesign: Redesign | null }, heading: string) {
+    setBusy(false);
+    setProblem(null);
+    setResult(saved.extract);
+    setTitle(heading);
+    setDiagnosis(saved.diagnosis ? { status: "done", result: saved.diagnosis } : { status: "idle" });
+    setRedesign(saved.redesign ? { status: "done", result: saved.redesign } : { status: "idle" });
+    setBpmnXml(null); // the diagram redraws from the steps and reports its XML again
+  }
+
   function showExample() {
     runId.current++;
-    setBusy(false);
-    setErrors([]);
-    setResult(sampleExtract);
-    setTitle(`${sampleProcessName} — worked example`);
-    setDiagnosis({ status: "done", result: sampleDiagnose });
-    setRedesign({ status: "done", result: sampleRedesign });
-    setBpmnXml(null);
+    show(
+      { extract: sampleExtract, diagnosis: sampleDiagnose, redesign: sampleRedesign },
+      `${sampleProcessName} — worked example`,
+    );
+  }
+
+  async function openSaved(file: File) {
+    const id = ++runId.current;
+    const reject = (lines: string[]) => setProblem({ title: "Could not open that file", lines });
+
+    if (file.size > MAX_SAVED_FILE_BYTES) {
+      reject([
+        `The file is ${(file.size / 1_000_000).toFixed(1)} MB. Saved results are well under ${
+          MAX_SAVED_FILE_BYTES / 1_000_000
+        } MB, so this is not one.`,
+      ]);
+      return;
+    }
+
+    let json: unknown;
+    try {
+      json = JSON.parse(await file.text());
+    } catch {
+      if (runId.current === id) reject(["The file is not valid JSON."]);
+      return;
+    }
+    if (runId.current !== id) return;
+
+    const parsed = parseSavedAudit(json);
+    if (!parsed.ok) {
+      reject(parsed.errors);
+      return;
+    }
+    show(parsed.value, `${file.name} — opened`);
   }
 
   const hasKey = apiKey.trim().length > 0;
@@ -173,7 +216,7 @@ export default function Page() {
   const proposal = redesign.status === "done" ? redesign.result : null;
   const proposalWarnings = result && proposal ? redesignWarnings(result.steps, proposal) : [];
   const download = result
-    ? { ...result, ...(findings ?? {}), bpmnXml, redesign: proposal }
+    ? buildSavedAudit({ extract: result, diagnosis: findings, redesign: proposal }, bpmnXml)
     : null;
 
   const retryButton = (
@@ -212,19 +255,18 @@ export default function Page() {
         onProse={setProse}
         onSubmit={analyse}
         onExample={showExample}
+        onOpen={openSaved}
         busy={busy}
         hasKey={hasKey}
       />
 
-      {errors.length > 0 ? (
+      {problem ? (
         <section className="flex flex-col gap-1 border border-accent p-4">
-          <h2 className="text-[11px] uppercase tracking-wider text-accent">
-            Analysis rejected
-          </h2>
+          <h2 className="text-[11px] uppercase tracking-wider text-accent">{problem.title}</h2>
           <ul className="flex flex-col gap-0.5">
-            {errors.map((error, i) => (
+            {problem.lines.map((line, i) => (
               <li key={i} className="font-mono text-xs">
-                {error}
+                {line}
               </li>
             ))}
           </ul>
@@ -268,6 +310,20 @@ export default function Page() {
           ) : null}
 
           <FlowEfficiency metrics={result.metrics} />
+
+          {diagnosis.status === "idle" && !busy ? (
+            <section className="flex flex-col gap-2 border border-border bg-surface p-4">
+              <p className="text-xs text-muted">
+                This result has no bottlenecks or waste yet.
+              </p>
+              <button type="button" className={BUTTON} disabled={!hasKey} onClick={retryDiagnosis}>
+                Find bottlenecks and waste
+              </button>
+              {hasKey ? null : (
+                <p className="text-xs text-muted">Enter an API key above first.</p>
+              )}
+            </section>
+          ) : null}
 
           {diagnosis.status === "running" ? (
             <p className="border border-border bg-surface px-4 py-3 text-xs text-muted">

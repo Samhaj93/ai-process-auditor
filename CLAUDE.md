@@ -74,7 +74,7 @@ Celonis-referenced: dense, data-forward, calm. The screen is an instrument panel
 
 Next.js (App Router) · TypeScript · Tailwind · `zod` for runtime schema validation · `bpmn-js` for BPMN rendering · `bpmn-auto-layout` for BPMN layout · run locally by each user with `npm run dev`. There is no hosted deployment, so there is no serverless time limit to design around.
 
-Do not add a database, auth, or state library until explicitly asked. A completed audit lives in React state and can be downloaded as JSON.
+Do not add a database, auth, or state library until explicitly asked. A completed audit lives in React state, can be downloaded as JSON, and can be opened again from that file. `lib/savedAudit.ts` owns the file format. An opened file is untrusted: it passes the same validation as a model response, and every figure is recomputed from its steps.
 
 ## Working conventions
 
@@ -98,7 +98,7 @@ The project stays free to run. Do not change the default to a paid model or add 
 Known consequences:
 
 - Free models sometimes return valid JSON with every wait time set to zero, which reads as 100% flow efficiency. The schema cannot catch this — it checks shape, not sense. `lib/quality.ts` flags it, and the UI tells the user that a paid model, entered in the Model field, gives better results.
-- Stage 2 fails on the free model far more often than stage 1: empty responses, invented enum values, and findings that double-count the same minutes. That is why diagnosis has its own retry and its own plausibility checks.
+- Stage 2 fails on the free model more often than stage 1: empty or unreadable responses, invented enum values, and findings that double-count the same minutes. That is why diagnosis has its own retry and its own plausibility checks. `callModel` retries empty and unreadable responses automatically, up to three attempts; output that parses but breaks the schema is reported, never retried silently. Its output limit is not the problem: measured stage 2 runs used under half of 8,000 tokens, including hidden reasoning, and none were cut off. Do not raise it for stage 2 without new evidence.
 - A single free diagnosis has taken over 40 seconds. `callModel` allows 120 seconds per attempt and up to three attempts, so in the worst case a user waits several minutes before seeing an error.
 - Stage 4 fails on the free model about one attempt in three, and a successful attempt takes one to three minutes. Hidden reasoning counts against `max_tokens`: one measured redesign spent 4,555 of 8,000 tokens reasoning, so the redesign route asks for 16,000 to stop its JSON being cut off. Free redesigns can also be very optimistic; `redesignWarnings` only catches figures that cannot be true, not hopeful ones.
 - Free OpenRouter keys are capped at 50 requests a day. An analysis makes two, a redesign one more, and retries count too: roughly 16 analyses with redesigns, or 25 without.

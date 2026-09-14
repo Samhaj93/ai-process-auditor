@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef } from "react";
+
 import { MAX_PROSE_CHARS, MIN_PROSE_CHARS } from "@/lib/limits";
 
 export function ProseInput({
@@ -7,6 +9,7 @@ export function ProseInput({
   onProse,
   onSubmit,
   onExample,
+  onOpen,
   busy,
   hasKey,
 }: {
@@ -14,9 +17,13 @@ export function ProseInput({
   onProse: (v: string) => void;
   onSubmit: () => void;
   onExample: () => void;
+  /** Receives a result file the user downloaded earlier. */
+  onOpen: (file: File) => void;
   busy: boolean;
   hasKey: boolean;
 }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+
   const length = prose.trim().length;
   const tooLong = length > MAX_PROSE_CHARS;
   const tooShort = length > 0 && length < MIN_PROSE_CHARS;
@@ -63,6 +70,27 @@ export function ProseInput({
         >
           Show worked example
         </button>
+
+        <button
+          type="button"
+          className="text-xs text-muted underline underline-offset-2 disabled:no-underline"
+          disabled={busy}
+          onClick={() => fileInput.current?.click()}
+        >
+          Open a saved result
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            // Cleared so that choosing the same file again still counts as a change.
+            e.target.value = "";
+            if (file) onOpen(file);
+          }}
+        />
 
         <span
           className={`ml-auto text-xs tabular-nums ${tooLong ? "text-accent" : "text-muted"}`}

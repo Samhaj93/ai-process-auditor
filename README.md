@@ -42,11 +42,12 @@ Then open **http://localhost:3000**. Leave that terminal window open while you u
    - **Before and after**: flow efficiency, lead time, process time and step count side by side, with the change worked out for you.
    - **Changes**: each proposed change, the bottleneck or waste it tackles, its effort and risk, and its estimated saving.
    - **Redesigned process diagram**: the proposed process, drawn the same way as the current one.
-5. Press **Download JSON** to keep everything, including both diagrams' data. Nothing is saved, so refreshing the page clears the result.
+5. Press **Download JSON** to keep everything. Nothing is saved otherwise, so refreshing the page clears the result.
+6. To come back to it later, press **Open a saved result** and choose the file you downloaded. It opens exactly as you left it, without using any requests. If you saved it before bottlenecks and waste were found, you can find them from there.
 
 The steps and the diagram appear first. Bottlenecks and waste follow in a second request. If that part fails, the steps and diagram stay on screen and you can press **Retry diagnosis**. The redesign only runs when you press its button.
 
-The "after" figures are calculated from the redesigned steps, the same way as the "before" figures. They are not the model's estimate. Only each change's individual saving is estimated.
+The "after" figures are calculated from the redesigned steps, the same way as the "before" figures. They are not the model's estimate. Only each change's individual saving is estimated. When you open a saved result, every figure is calculated again from its steps, so an edited file can't show numbers its steps don't support.
 
 Press **Show worked example** to see a finished result, including a redesign, without a key.
 
@@ -54,7 +55,7 @@ Press **Show worked example** to see a finished result, including a redesign, wi
 
 ## Limits of the free setup
 
-- **Free keys are capped at 50 requests a day** per OpenRouter account. An analysis makes two: one for the steps, one for bottlenecks and waste. A redesign makes one more. Retries count too. So expect about 16 full analyses with redesigns a day, or 25 without. Adding $10 of credit raises the cap to 1,000 requests. The process diagrams are drawn on your own computer and use none of them.
+- **Free keys are capped at 50 requests a day** per OpenRouter account. An analysis makes two: one for the steps, one for bottlenecks and waste. A redesign makes one more. Retries count too. So expect about 16 full analyses with redesigns a day, or 25 without. Adding $10 of credit raises the cap to 1,000 requests. The process diagrams are drawn on your own computer and use none of them, and neither does opening a saved result.
 - **A redesign is slow on the free model**: one to three minutes.
 - **Free models sometimes get it wrong.**
   - The most common mistake is missing the waiting time, which makes flow efficiency read 100%. The app shows a **Check this result** warning.
@@ -67,7 +68,7 @@ Press **Show worked example** to see a finished result, including a redesign, wi
 
 - **Your key** stays in the browser tab. It is sent with each request and never stored or logged by the app. Closing the tab clears it.
 - **Your description** goes to OpenRouter and on to whichever company runs the model. On free models, that company may use it for training. **Don't describe anything confidential while using a free model.**
-- **Nothing is saved.** No database, no accounts. Results exist only on your screen and in the files you download.
+- **Nothing is saved.** No database, no accounts. Results exist only on your screen and in the files you download. Opening a saved result reads the file in your browser; it is not uploaded anywhere.
 
 ## Troubleshooting
 
@@ -85,6 +86,7 @@ Press **Show worked example** to see a finished result, including a redesign, wi
 | **Check these findings** | Some bottleneck or waste figures can't be true | Press **Retry diagnosis**, or use a paid model |
 | **Redesign not produced** | The redesign request failed. Everything above it is unaffected | Press **Try again** |
 | **Check this redesign** | The redesign doesn't shorten the process, its savings don't add up, or it removes work customers pay for | Press **Propose another redesign**, or use a paid model |
+| **Could not open that file** | The file isn't a result saved from this app, or it has been edited and no longer checks out. The message lists what's wrong | Choose the original file you downloaded |
 | **The diagram could not be drawn** | Drawing failed in your browser. The steps and findings are unaffected | Refresh the page and run it again |
 
 ## For developers
@@ -101,6 +103,7 @@ npm run build
 - `lib/schema.ts`: the data shape, and the checks every result must pass
 - `lib/quality.ts`: flags results that pass the checks but look implausible
 - `lib/bpmn.ts`: builds the process diagrams from the steps, in code rather than with AI
+- `lib/savedAudit.ts`: the downloaded file's format, and the checks a file must pass to open
 
 Architecture rules and project decisions live in [CLAUDE.md](CLAUDE.md). Read it before changing anything.
 
