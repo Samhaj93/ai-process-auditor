@@ -143,12 +143,50 @@ export const RedesignChangeSchema = z.object({
 });
 export type RedesignChange = z.infer<typeof RedesignChangeSchema>;
 
+/**
+ * Stage 4, as the model returns it: the changes, and the complete redesigned
+ * process as steps. No figures. Projected metrics are computed from the steps,
+ * never supplied by the model.
+ */
+export const RedesignProposalSchema = z.object({
+  summary: z.string().min(1),
+  changes: z.array(RedesignChangeSchema).min(1),
+  steps: ProcessStepsSchema, // the to-be process
+});
+export type RedesignProposal = z.infer<typeof RedesignProposalSchema>;
+
+/** Stage 4, as stored and rendered: the proposal plus figures computed from its steps. */
 export const RedesignSchema = z.object({
-  summary: z.string(),
-  changes: z.array(RedesignChangeSchema),
-  projectedMetrics: ProcessMetricsSchema, // the to-be state
+  summary: z.string().min(1),
+  changes: z.array(RedesignChangeSchema).min(1),
+  steps: ProcessStepsSchema,
+  projectedMetrics: ProcessMetricsSchema, // computeMetrics(steps), never the model's
 });
 export type Redesign = z.infer<typeof RedesignSchema>;
+
+/**
+ * Stage 4 validation for one request. On top of the shape, including the
+ * redesigned steps' own id checks, every change must target a step that exists
+ * in the current process.
+ *
+ * Built per request, like diagnoseResultSchemaFor, and for the same reason.
+ */
+export function redesignProposalSchemaFor(currentSteps: ProcessStep[]) {
+  const ids = new Set(currentSteps.map((s) => s.id));
+  return RedesignProposalSchema.superRefine((proposal, ctx) => {
+    for (const [i, change] of proposal.changes.entries()) {
+      for (const [j, id] of change.targetStepIds.entries()) {
+        if (!ids.has(id)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["changes", i, "targetStepIds", j],
+            message: `references unknown step id "${id}"`,
+          });
+        }
+      }
+    }
+  });
+}
 
 export const AuditMetaSchema = z.object({
   processName: z.string().min(1),

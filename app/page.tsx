@@ -6,13 +6,15 @@ import { FlowEfficiency } from "@/app/components/FlowEfficiency";
 import { KeyEntry } from "@/app/components/KeyEntry";
 import { ProcessDiagram } from "@/app/components/ProcessDiagram";
 import { ProseInput } from "@/app/components/ProseInput";
+import { RedesignPanel } from "@/app/components/RedesignPanel";
 import { StepTable } from "@/app/components/StepTable";
 import { WastePanel } from "@/app/components/WastePanel";
 import { PROVIDERS, type ProviderId } from "@/lib/callModel";
 import { sampleDiagnose } from "@/lib/fixtures/sample-diagnose";
 import { sampleExtract, sampleProcessName } from "@/lib/fixtures/sample-extract";
-import { auditWarnings, diagnoseWarnings } from "@/lib/quality";
-import type { DiagnoseResult, ExtractResult, ProcessStep } from "@/lib/schema";
+import { sampleRedesign } from "@/lib/fixtures/sample-redesign";
+import { auditWarnings, diagnoseWarnings, redesignWarnings } from "@/lib/quality";
+import type { DiagnoseResult, ExtractResult, ProcessStep, Redesign } from "@/lib/schema";
 import { useSessionState } from "@/lib/useSessionState";
 
 const DEFAULT_PROVIDER: ProviderId = "openrouter";
@@ -22,10 +24,11 @@ function toProvider(value: string): ProviderId {
   return Object.hasOwn(PROVIDERS, value) ? (value as ProviderId) : DEFAULT_PROVIDER;
 }
 
-type Diagnosis =
+/** A model stage that runs after the steps are on screen. */
+type Stage<T> =
   | { status: "idle" }
   | { status: "running" }
-  | { status: "done"; result: DiagnoseResult }
+  | { status: "done"; result: T }
   | { status: "failed"; errors: string[] };
 
 /** POST to a stage route. Returns the parsed body, or the errors to show. */
@@ -52,8 +55,11 @@ async function postStage<T>(
   }
 }
 
-const RETRY_BUTTON =
+const BUTTON =
   "self-start border border-foreground px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:border-border disabled:text-muted";
+
+const REDESIGN_CAPTION =
+  "The redesigned process, drawn from the proposed steps in code, not by the model. Drag to move around.";
 
 export default function Page() {
   // Key, provider and model live in sessionStorage; the description does not.
@@ -67,7 +73,8 @@ export default function Page() {
   const [title, setTitle] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [diagnosis, setDiagnosis] = useState<Diagnosis>({ status: "idle" });
+  const [diagnosis, setDiagnosis] = useState<Stage<DiagnoseResult>>({ status: "idle" });
+  const [redesign, setRedesign] = useState<Stage<Redesign>>({ status: "idle" });
   const [bpmnXml, setBpmnXml] = useState<string | null>(null);
 
   // Every analysis, example and retry gets a new id. A slow response from an
@@ -81,6 +88,7 @@ export default function Page() {
 
   async function diagnose(steps: ProcessStep[], id: number) {
     setDiagnosis({ status: "running" });
+    setRedesign({ status: "idle" }); // a redesign answers the old findings
     const res = await postStage<DiagnoseResult>("/api/diagnose", {
       steps,
       provider,
@@ -100,6 +108,7 @@ export default function Page() {
     setResult(null);
     setTitle(null);
     setDiagnosis({ status: "idle" });
+    setRedesign({ status: "idle" });
     setBpmnXml(null);
 
     const res = await postStage<ExtractResult>("/api/extract", {
@@ -125,6 +134,26 @@ export default function Page() {
     void diagnose(result.steps, ++runId.current);
   }
 
+  // Redesign is on request, not automatic: it costs one more of the 50 free
+  // daily requests and can take a couple of minutes.
+  async function proposeRedesign() {
+    if (!result || diagnosis.status !== "done") return;
+    const id = ++runId.current;
+    setRedesign({ status: "running" });
+    const res = await postStage<Redesign>("/api/redesign", {
+      steps: result.steps,
+      bottlenecks: diagnosis.result.bottlenecks,
+      wastes: diagnosis.result.wastes,
+      provider,
+      apiKey,
+      model,
+    });
+    if (runId.current !== id) return;
+    setRedesign(
+      res.ok ? { status: "done", result: res.data } : { status: "failed", errors: res.errors },
+    );
+  }
+
   function showExample() {
     runId.current++;
     setBusy(false);
@@ -132,17 +161,28 @@ export default function Page() {
     setResult(sampleExtract);
     setTitle(`${sampleProcessName} — worked example`);
     setDiagnosis({ status: "done", result: sampleDiagnose });
+    setRedesign({ status: "done", result: sampleRedesign });
     setBpmnXml(null);
   }
 
+  const hasKey = apiKey.trim().length > 0;
   const warnings = result ? auditWarnings(result) : [];
   const findings = diagnosis.status === "done" ? diagnosis.result : null;
   const findingWarnings = result && findings ? diagnoseWarnings(result.steps, findings) : [];
-  const canRetry = apiKey.trim().length > 0 && diagnosis.status !== "running";
-  const download = result ? { ...result, ...(findings ?? {}), bpmnXml } : null;
+  const hasFindings = !!findings && (findings.bottlenecks.length > 0 || findings.wastes.length > 0);
+  const proposal = redesign.status === "done" ? redesign.result : null;
+  const proposalWarnings = result && proposal ? redesignWarnings(result.steps, proposal) : [];
+  const download = result
+    ? { ...result, ...(findings ?? {}), bpmnXml, redesign: proposal }
+    : null;
 
   const retryButton = (
-    <button type="button" className={RETRY_BUTTON} disabled={!canRetry} onClick={retryDiagnosis}>
+    <button
+      type="button"
+      className={BUTTON}
+      disabled={!hasKey || diagnosis.status === "running"}
+      onClick={retryDiagnosis}
+    >
       Retry diagnosis
     </button>
   );
@@ -153,7 +193,8 @@ export default function Page() {
         <h1 className="text-lg">AI Process Auditor</h1>
         <p className="text-xs text-muted">
           Describe a business process in plain language. Get its steps, waiting
-          time, flow efficiency, bottlenecks, waste and a process diagram.
+          time, flow efficiency, bottlenecks, waste, a process diagram and a
+          redesign.
         </p>
       </header>
 
@@ -172,7 +213,7 @@ export default function Page() {
         onSubmit={analyse}
         onExample={showExample}
         busy={busy}
-        hasKey={apiKey.trim().length > 0}
+        hasKey={hasKey}
       />
 
       {errors.length > 0 ? (
@@ -288,6 +329,105 @@ export default function Page() {
             bottlenecks={findings?.bottlenecks}
             wastes={findings?.wastes}
           />
+
+          {findings ? (
+            <div className="flex flex-col gap-6 border-t border-border pt-6">
+              {proposal ? null : (
+                <section className="flex flex-col gap-2">
+                  <h2 className="text-[11px] uppercase tracking-wider text-muted">Redesign</h2>
+                  {hasFindings ? (
+                    <>
+                      <p className="max-w-prose text-sm">
+                        Have the model propose changes that tackle these
+                        bottlenecks and waste, and compare the process before
+                        and after.
+                      </p>
+                      <p className="text-xs text-muted">
+                        Uses one more request. On the free model this can take
+                        a couple of minutes.
+                      </p>
+                      <button
+                        type="button"
+                        className={BUTTON}
+                        disabled={!hasKey || redesign.status === "running"}
+                        onClick={proposeRedesign}
+                      >
+                        {redesign.status === "running"
+                          ? "Proposing a redesign…"
+                          : redesign.status === "failed"
+                            ? "Try again"
+                            : "Propose a redesign"}
+                      </button>
+                      {hasKey ? null : (
+                        <p className="text-xs text-muted">
+                          Enter an API key above to propose a redesign.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted">
+                      No bottlenecks or waste were found, so there is nothing to
+                      redesign.
+                    </p>
+                  )}
+                </section>
+              )}
+
+              {redesign.status === "failed" ? (
+                <section className="flex flex-col gap-2 border border-accent p-4">
+                  <h2 className="text-[11px] uppercase tracking-wider text-accent">
+                    Redesign not produced
+                  </h2>
+                  <ul className="flex flex-col gap-0.5">
+                    {redesign.errors.map((error, i) => (
+                      <li key={i} className="font-mono text-xs">
+                        {error}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted">
+                    Everything above is unaffected. Free models fail at this
+                    about one time in three; trying again may work, or put a
+                    paid model in the Model field above.
+                  </p>
+                </section>
+              ) : null}
+
+              {proposalWarnings.length > 0 ? (
+                <section className="flex flex-col gap-2 border border-accent p-4">
+                  <h2 className="text-[11px] uppercase tracking-wider text-accent">
+                    Check this redesign
+                  </h2>
+                  <ul className="flex flex-col gap-1">
+                    {proposalWarnings.map((w) => (
+                      <li key={w.code} className="text-sm">
+                        {w.message}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className={BUTTON}
+                    disabled={!hasKey}
+                    onClick={proposeRedesign}
+                  >
+                    Propose another redesign
+                  </button>
+                </section>
+              ) : null}
+
+              {proposal ? (
+                <>
+                  <RedesignPanel before={result.metrics} redesign={proposal} />
+                  <ProcessDiagram
+                    steps={proposal.steps}
+                    title="Redesigned process · BPMN"
+                    caption={REDESIGN_CAPTION}
+                  />
+                </>
+              ) : null}
+            </div>
+          ) : null}
         </>
       ) : null}
     </main>

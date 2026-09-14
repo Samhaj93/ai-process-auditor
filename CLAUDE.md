@@ -42,7 +42,7 @@ Four stages, run as separate calls, not one mega-prompt:
 1. **Extract** — prose in, `steps[]` and `metrics` out. Normalises the process into discrete steps with actor, duration, wait time, systems.
 2. **Diagnose** — steps in, `bottlenecks[]` and `wastes[]` out.
 3. **Model** — steps in, BPMN 2.0 XML out. **Built in code, not by a model.** `lib/bpmn.ts` generates the XML, `bpmn-auto-layout` positions it in the browser, `bpmn-js` draws it. The steps already hold the order, rework loops and actors, so the diagram is deterministic, instant, and spends none of the free daily requests. Do not move this to a model call.
-4. **Redesign** — everything above in, `redesign` out.
+4. **Redesign** — everything above in, `redesign` out. The model returns the changes and the complete redesigned steps, never figures. The route computes `projectedMetrics` from those steps with `computeMetrics`, so before and after use the same arithmetic. `redesignProposalSchemaFor` validates the proposal and requires every change to target a current step. It runs only when the user presses a button: it costs a request and takes one to three minutes on the free model.
 
 Each stage is independently callable and independently testable. Stages 2 and 3 can run in parallel. Stage 1 must succeed before anything else runs.
 
@@ -87,7 +87,7 @@ Do not add a database, auth, or state library until explicitly asked. A complete
 
 ## Current state
 
-Stages 1 and 2 work end to end. Stage 1 (`POST /api/extract`) turns prose into validated steps and flow efficiency. Stage 2 (`POST /api/diagnose`) turns those steps into bottlenecks and DOWNTIME waste, validated with `diagnoseResultSchemaFor` so every finding points at a real step and no step carries two bottlenecks. The UI starts stage 2 only once stage 1 is on screen; a failed diagnosis shows a retry and never hides the steps. Stage 3 draws the BPMN diagram in the browser straight from the steps, with no request, and outlines bottlenecks once stage 2 returns. Default provider is OpenRouter on a free model. Stage 4 not started.
+All four stages work end to end. Stage 1 (`POST /api/extract`) turns prose into validated steps and flow efficiency. Stage 2 (`POST /api/diagnose`) turns those steps into bottlenecks and DOWNTIME waste, validated with `diagnoseResultSchemaFor` so every finding points at a real step and no step carries two bottlenecks. The UI starts stage 2 only once stage 1 is on screen; a failed diagnosis shows a retry and never hides the steps. Stage 3 draws the BPMN diagram in the browser straight from the steps, with no request, and outlines bottlenecks once stage 2 returns. Stage 4 (`POST /api/redesign`) runs when the user asks, and shows before and after side by side, the changes, and a diagram of the redesigned process. Default provider is OpenRouter on a free model.
 
 Request handling shared by stage routes lives in `lib/routeInput.ts`. Add new stage routes through it rather than re-validating provider fields by hand.
 
@@ -100,7 +100,8 @@ Known consequences:
 - Free models sometimes return valid JSON with every wait time set to zero, which reads as 100% flow efficiency. The schema cannot catch this — it checks shape, not sense. `lib/quality.ts` flags it, and the UI tells the user that a paid model, entered in the Model field, gives better results.
 - Stage 2 fails on the free model far more often than stage 1: empty responses, invented enum values, and findings that double-count the same minutes. That is why diagnosis has its own retry and its own plausibility checks.
 - A single free diagnosis has taken over 40 seconds. `callModel` allows 120 seconds per attempt and up to three attempts, so in the worst case a user waits several minutes before seeing an error.
-- Free OpenRouter keys are capped at 50 requests a day. A full analysis makes two, more with retries, so roughly 25 analyses.
+- Stage 4 fails on the free model about one attempt in three, and a successful attempt takes one to three minutes. Hidden reasoning counts against `max_tokens`: one measured redesign spent 4,555 of 8,000 tokens reasoning, so the redesign route asks for 16,000 to stop its JSON being cut off. Free redesigns can also be very optimistic; `redesignWarnings` only catches figures that cannot be true, not hopeful ones.
+- Free OpenRouter keys are capped at 50 requests a day. An analysis makes two, a redesign one more, and retries count too: roughly 16 analyses with redesigns, or 25 without.
 
 ## Framework notes
 

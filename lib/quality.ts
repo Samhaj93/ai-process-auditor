@@ -16,6 +16,8 @@ import {
   type DiagnoseResult,
   type ExtractResult,
   type ProcessStep,
+  type Redesign,
+  type RedesignChange,
 } from "./schema.ts";
 
 export interface AuditWarning {
@@ -106,6 +108,67 @@ export function diagnoseWarnings(
       code: "no-findings",
       message:
         "No bottlenecks or waste were found, yet most of this process's time is spent waiting. The model probably missed them.",
+    });
+  }
+
+  return warnings;
+}
+
+export interface RedesignWarning {
+  code: "no-improvement" | "savings-mismatch" | "value-add-removed";
+  message: string;
+}
+
+/**
+ * Plausibility checks on a stage 4 redesign, against the process it replaces.
+ * The projected figures are computed from the redesigned steps, so they are
+ * consistent with each other. What can be wrong is the proposal itself.
+ */
+export function redesignWarnings(current: ProcessStep[], redesign: Redesign): RedesignWarning[] {
+  const warnings: RedesignWarning[] = [];
+  const before = computeMetrics(current);
+  // Recomputed rather than read from projectedMetrics, which arrived from the browser.
+  const after = computeMetrics(redesign.steps);
+  const saved = before.leadTimeMinutes - after.leadTimeMinutes;
+
+  if (saved <= 0) {
+    warnings.push({
+      code: "no-improvement",
+      message:
+        "The redesigned process is no faster than the current one, so these changes would not shorten lead time.",
+    });
+  }
+
+  // Per-change savings are the model's estimates. Small gaps are expected; a
+  // large one means those estimates cannot be taken at face value.
+  const claimed = redesign.changes.reduce((n, c) => n + c.expectedSavingMinutes, 0);
+  if (Math.abs(claimed - saved) > Math.max(60, Math.abs(saved) * 0.25)) {
+    warnings.push({
+      code: "savings-mismatch",
+      message: `The changes claim ${claimed.toLocaleString()} minutes saved, but the redesigned steps save ${Math.max(saved, 0).toLocaleString()}. The saving shown for each change is unreliable.`,
+    });
+  }
+
+  // Value-add work is what the customer pays for. Merging it into another step
+  // is fine; eliminating it, or letting it vanish without a merge, is not.
+  const kept = new Set(redesign.steps.map((s) => s.id));
+  const targetedBy = (action: RedesignChange["action"]) =>
+    new Set(
+      redesign.changes.filter((c) => c.action === action).flatMap((c) => c.targetStepIds),
+    );
+  const merged = targetedBy("merge");
+  const eliminated = targetedBy("eliminate");
+  const removed = current.filter(
+    (s) =>
+      s.valueClass === "value-add" &&
+      (eliminated.has(s.id) || (!kept.has(s.id) && !merged.has(s.id))),
+  );
+  if (removed.length > 0) {
+    warnings.push({
+      code: "value-add-removed",
+      message: `The redesign removes value-adding work: ${removed
+        .map((s) => s.name)
+        .join(", ")}. That is the work the customer pays for, so check this change.`,
     });
   }
 

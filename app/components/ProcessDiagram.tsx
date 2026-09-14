@@ -48,11 +48,15 @@ export function ProcessDiagram({
   steps,
   bottlenecks = NO_BOTTLENECKS,
   onXml,
+  title = "Process diagram · BPMN",
+  caption = "Drawn from the steps in code, not by the model, so it always matches the table below. Drag to move around.",
 }: {
   steps: ProcessStep[];
   bottlenecks?: Bottleneck[];
   /** Receives the laid-out XML, so it can be included in the download. */
   onXml?: (xml: string) => void;
+  title?: string;
+  caption?: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,9 +116,7 @@ export function ProcessDiagram({
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-[11px] uppercase tracking-wider text-muted">
-        Process diagram · BPMN
-      </h2>
+      <h2 className="text-[11px] uppercase tracking-wider text-muted">{title}</h2>
       <div
         ref={container}
         className="w-full border border-border bg-background"
@@ -124,8 +126,7 @@ export function ProcessDiagram({
         <p className="text-xs text-accent">The diagram could not be drawn: {error}</p>
       ) : null}
       <p className="text-xs text-muted">
-        Drawn from the steps in code, not by the model, so it always matches the
-        table below. Drag to move around.
+        {caption}
         {bottlenecks.length > 0 ? " A thick outline marks a bottleneck." : ""}
       </p>
     </section>
