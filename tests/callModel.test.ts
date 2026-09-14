@@ -153,9 +153,16 @@ describe("callModel", () => {
     assert.equal(called, false);
   });
 
-  it("fails on unparseable output rather than returning something wrong", async () => {
-    stubFetch([{ content: "I think the process has four steps." }]);
-    await assert.rejects(() => callModel(base), /returned no JSON/);
+  it("retries unreadable output and succeeds on the next attempt", async () => {
+    const calls = stubFetch([{ content: '{"steps": [' }, { content: '{"steps":[]}' }]);
+    assert.deepEqual(await callModel(base), { steps: [] });
+    assert.equal(calls(), 2);
+  });
+
+  it("fails on unparseable output after three attempts rather than returning something wrong", async () => {
+    const calls = stubFetch([{ content: "I think the process has four steps." }]);
+    await assert.rejects(() => callModel(base), /returned no JSON after 3 attempts/);
+    assert.equal(calls(), 3);
   });
 });
 

@@ -80,9 +80,9 @@ export class ModelError extends Error {
 const TIMEOUT_MS = 120_000;
 
 /**
- * Free endpoints intermittently return an empty body or a 429 with nothing
- * generated. Both are transient and safe to repeat — the request is a pure
- * function of its input, so a retry cannot duplicate any side effect.
+ * Free endpoints intermittently return an empty body, unreadable output, or a
+ * 429 with nothing generated. All are transient and safe to repeat — the request
+ * is a pure function of its input, so a retry cannot duplicate any side effect.
  * Measured: ~33% empty rate on the default free model, which three attempts
  * takes to roughly 1 in 30.
  */
@@ -203,7 +203,19 @@ export async function callModel<T>(opts: CallOptions): Promise<T> {
       throw new ModelError(`${cfg.label} ${lastProblem} after ${MAX_ATTEMPTS} attempts`);
     }
 
-    return parseJson<T>(text, cfg.label);
+    // Unreadable output is as transient as an empty one: free models return it
+    // intermittently, and the same request often succeeds a moment later. Output
+    // that parses but breaks the schema is not retried here; the route reports it.
+    try {
+      return parseJson<T>(text, cfg.label);
+    } catch (err) {
+      if (!(err instanceof ModelError) || attempt === MAX_ATTEMPTS) {
+        throw err instanceof ModelError
+          ? new ModelError(`${err.message} after ${MAX_ATTEMPTS} attempts`)
+          : err;
+      }
+      await delay(RETRY_DELAY_MS * attempt);
+    }
   }
 
   throw new ModelError(`${cfg.label} ${lastProblem} after ${MAX_ATTEMPTS} attempts`);
