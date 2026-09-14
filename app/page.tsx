@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { FlowEfficiency } from "@/app/components/FlowEfficiency";
 import { KeyEntry } from "@/app/components/KeyEntry";
+import { ProcessDiagram } from "@/app/components/ProcessDiagram";
 import { ProseInput } from "@/app/components/ProseInput";
 import { StepTable } from "@/app/components/StepTable";
 import { WastePanel } from "@/app/components/WastePanel";
@@ -67,6 +68,7 @@ export default function Page() {
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [diagnosis, setDiagnosis] = useState<Diagnosis>({ status: "idle" });
+  const [bpmnXml, setBpmnXml] = useState<string | null>(null);
 
   // Every analysis, example and retry gets a new id. A slow response from an
   // earlier one is dropped, so it can never overwrite what is now on screen.
@@ -98,6 +100,7 @@ export default function Page() {
     setResult(null);
     setTitle(null);
     setDiagnosis({ status: "idle" });
+    setBpmnXml(null);
 
     const res = await postStage<ExtractResult>("/api/extract", {
       prose,
@@ -129,13 +132,14 @@ export default function Page() {
     setResult(sampleExtract);
     setTitle(`${sampleProcessName} — worked example`);
     setDiagnosis({ status: "done", result: sampleDiagnose });
+    setBpmnXml(null);
   }
 
   const warnings = result ? auditWarnings(result) : [];
   const findings = diagnosis.status === "done" ? diagnosis.result : null;
   const findingWarnings = result && findings ? diagnoseWarnings(result.steps, findings) : [];
   const canRetry = apiKey.trim().length > 0 && diagnosis.status !== "running";
-  const download = result ? { ...result, ...(findings ?? {}) } : null;
+  const download = result ? { ...result, ...(findings ?? {}), bpmnXml } : null;
 
   const retryButton = (
     <button type="button" className={RETRY_BUTTON} disabled={!canRetry} onClick={retryDiagnosis}>
@@ -149,7 +153,7 @@ export default function Page() {
         <h1 className="text-lg">AI Process Auditor</h1>
         <p className="text-xs text-muted">
           Describe a business process in plain language. Get its steps, waiting
-          time, flow efficiency, bottlenecks and waste.
+          time, flow efficiency, bottlenecks, waste and a process diagram.
         </p>
       </header>
 
@@ -272,6 +276,12 @@ export default function Page() {
           ) : null}
 
           {findings ? <WastePanel wastes={findings.wastes} /> : null}
+
+          <ProcessDiagram
+            steps={result.steps}
+            bottlenecks={findings?.bottlenecks}
+            onXml={setBpmnXml}
+          />
 
           <StepTable
             steps={result.steps}

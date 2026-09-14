@@ -38,3 +38,15 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/* Bottlenecks on the process diagram (app/components/ProcessDiagram.tsx).
+   A thicker outline marks every bottleneck; high and critical ones also take
+   the accent, matching the step table. */
+.djs-element.bottleneck .djs-visual > :nth-child(1),
+.djs-element.bottleneck-severe .djs-visual > :nth-child(1) {
+  stroke-width: 3px !important;
+}
+
+.djs-element.bottleneck-severe .djs-visual > :nth-child(1) {
+  stroke: var(--accent) !important;
+}

@@ -41,10 +41,14 @@ Four stages, run as separate calls, not one mega-prompt:
 
 1. **Extract** — prose in, `steps[]` and `metrics` out. Normalises the process into discrete steps with actor, duration, wait time, systems.
 2. **Diagnose** — steps in, `bottlenecks[]` and `wastes[]` out.
-3. **Model** — steps in, BPMN 2.0 XML out.
+3. **Model** — steps in, BPMN 2.0 XML out. **Built in code, not by a model.** `lib/bpmn.ts` generates the XML, `bpmn-auto-layout` positions it in the browser, `bpmn-js` draws it. The steps already hold the order, rework loops and actors, so the diagram is deterministic, instant, and spends none of the free daily requests. Do not move this to a model call.
 4. **Redesign** — everything above in, `redesign` out.
 
 Each stage is independently callable and independently testable. Stages 2 and 3 can run in parallel. Stage 1 must succeed before anything else runs.
+
+Stage 3 constraints:
+- `bpmn-auto-layout` 1.3.0 silently drops lane and pool shapes, so each task's label carries its actor instead of a swimlane. Its README documents a newer API returning `{ xml, warnings }`; 1.3.0 returns the XML string. `types/bpmn-auto-layout.d.ts` declares what is installed.
+- `bpmn-js`'s licence requires the bpmn.io watermark on the canvas to stay fully visible. Never hide it or place anything over it.
 
 This split exists because single monolithic calls time out and fail opaquely. Do not merge stages to "simplify."
 
@@ -68,7 +72,7 @@ Celonis-referenced: dense, data-forward, calm. The screen is an instrument panel
 
 ## Stack
 
-Next.js (App Router) · TypeScript · Tailwind · `zod` for runtime schema validation · `bpmn-js` for BPMN rendering · run locally by each user with `npm run dev`. There is no hosted deployment, so there is no serverless time limit to design around.
+Next.js (App Router) · TypeScript · Tailwind · `zod` for runtime schema validation · `bpmn-js` for BPMN rendering · `bpmn-auto-layout` for BPMN layout · run locally by each user with `npm run dev`. There is no hosted deployment, so there is no serverless time limit to design around.
 
 Do not add a database, auth, or state library until explicitly asked. A completed audit lives in React state and can be downloaded as JSON.
 
@@ -78,12 +82,12 @@ Do not add a database, auth, or state library until explicitly asked. A complete
 - Commit after each slice that runs. Small commits, plain messages.
 - When a model response fails schema validation, surface the validation error to the user — never silently coerce or fill defaults.
 - Prefer deleting code to adding flags.
-- Don't add features, dependencies, or abstractions that weren't asked for. Propose them instead and wait. `zod` is an approved exception: it is the mechanism that enforces the validation rule above, and TypeScript types alone cannot, since they are erased at runtime.
+- Don't add features, dependencies, or abstractions that weren't asked for. Propose them instead and wait. Approved exceptions: `zod`, the mechanism that enforces the validation rule above, which TypeScript types alone cannot since they are erased at runtime; and `bpmn-js` with `bpmn-auto-layout`, which draw and lay out the stage 3 diagram.
 - Schemas in `lib/schema.ts` are the source of truth; types are derived with `z.infer`. Never derive a schema from a refined one with `.pick()` or `.omit()` — on zod 4 that compiles and silently drops the refinements. Export the narrower schema standalone instead, as `ProcessStepsSchema` is.
 
 ## Current state
 
-Stages 1 and 2 work end to end. Stage 1 (`POST /api/extract`) turns prose into validated steps and flow efficiency. Stage 2 (`POST /api/diagnose`) turns those steps into bottlenecks and DOWNTIME waste, validated with `diagnoseResultSchemaFor` so every finding points at a real step and no step carries two bottlenecks. The UI starts stage 2 only once stage 1 is on screen; a failed diagnosis shows a retry and never hides the steps. Default provider is OpenRouter on a free model. Stages 3–4 not started.
+Stages 1 and 2 work end to end. Stage 1 (`POST /api/extract`) turns prose into validated steps and flow efficiency. Stage 2 (`POST /api/diagnose`) turns those steps into bottlenecks and DOWNTIME waste, validated with `diagnoseResultSchemaFor` so every finding points at a real step and no step carries two bottlenecks. The UI starts stage 2 only once stage 1 is on screen; a failed diagnosis shows a retry and never hides the steps. Stage 3 draws the BPMN diagram in the browser straight from the steps, with no request, and outlines bottlenecks once stage 2 returns. Default provider is OpenRouter on a free model. Stage 4 not started.
 
 Request handling shared by stage routes lives in `lib/routeInput.ts`. Add new stage routes through it rather than re-validating provider fields by hand.
 
