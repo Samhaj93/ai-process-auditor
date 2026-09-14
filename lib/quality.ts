@@ -1,4 +1,4 @@
-// Plausibility checks on a finished extraction.
+// Plausibility checks on finished results.
 //
 // Separate from the schema on purpose. The schema decides whether a response
 // is *shaped* correctly; this decides whether it is *believable*. A model can
@@ -8,10 +8,15 @@
 //
 // Observed on free models roughly one run in three.
 //
-// Derived from the audit, not stored in it: a pure function of ExtractResult,
-// like computeMetrics, so the JSON contract is unchanged.
+// Derived from results, not stored in them: pure functions, like
+// computeMetrics, so the JSON contract is unchanged.
 
-import type { ExtractResult } from "./schema.ts";
+import {
+  computeMetrics,
+  type DiagnoseResult,
+  type ExtractResult,
+  type ProcessStep,
+} from "./schema.ts";
 
 export interface AuditWarning {
   code: "no-wait-time" | "no-process-time" | "single-step";
@@ -43,6 +48,64 @@ export function auditWarnings({ steps }: ExtractResult): AuditWarning[] {
       code: "single-step",
       message:
         "Only one step was extracted. A process described in a sentence or two may not give the model enough to work with.",
+    });
+  }
+
+  return warnings;
+}
+
+export interface DiagnoseWarning {
+  code: "impact-exceeds-step" | "recovery-exceeds-possible" | "no-findings";
+  message: string;
+}
+
+/**
+ * Plausibility checks on stage 2 findings, against the steps they describe.
+ * Each fires only on figures that cannot be true, not on merely optimistic ones:
+ * the model claiming every waiting minute is recoverable is optimistic, and
+ * passes.
+ */
+export function diagnoseWarnings(
+  steps: ProcessStep[],
+  { bottlenecks, wastes }: DiagnoseResult,
+): DiagnoseWarning[] {
+  const warnings: DiagnoseWarning[] = [];
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const metrics = computeMetrics(steps);
+
+  // A bottleneck cannot delay a step by more than the step takes in total.
+  const overstated = bottlenecks.filter((b) => {
+    const step = byId.get(b.stepId);
+    return step !== undefined && b.impactMinutes > step.processMinutes + step.waitMinutes;
+  });
+  if (overstated.length > 0) {
+    warnings.push({
+      code: "impact-exceeds-step",
+      message:
+        overstated.length === 1
+          ? "One bottleneck claims more delay than its step takes in total, so its impact figure is overstated."
+          : `${overstated.length} bottlenecks claim more delay than their steps take in total, so those impact figures are overstated.`,
+    });
+  }
+
+  // Value-add work is the part of lead time that removing waste cannot recover.
+  const valueAddMinutes = steps
+    .filter((s) => s.valueClass === "value-add")
+    .reduce((n, s) => n + s.processMinutes, 0);
+  const recoverable = metrics.leadTimeMinutes - valueAddMinutes;
+  const claimed = wastes.reduce((n, w) => n + w.estimatedMinutes, 0);
+  if (claimed > recoverable) {
+    warnings.push({
+      code: "recovery-exceeds-possible",
+      message: `The waste findings claim ${claimed.toLocaleString()} recoverable minutes, but only ${recoverable.toLocaleString()} minutes of this process are not value-adding work. Some findings overlap or are overstated.`,
+    });
+  }
+
+  if (bottlenecks.length === 0 && wastes.length === 0 && metrics.flowEfficiency < 0.5) {
+    warnings.push({
+      code: "no-findings",
+      message:
+        "No bottlenecks or waste were found, yet most of this process's time is spent waiting. The model probably missed them.",
     });
   }
 

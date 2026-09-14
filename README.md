@@ -1,8 +1,8 @@
 # AI Process Auditor
 
-Describe a business process in plain language and get back its steps, where work waits, and its **flow efficiency**: how much of the total time is actual work.
+Describe a business process in plain language and get back its steps, where work waits, its **flow efficiency** (how much of the total time is actual work), and its bottlenecks and waste.
 
-> **Status:** stage 1 of 4. Finding the steps and measuring flow efficiency works. Bottleneck and waste detection, the process diagram, and redesign proposals are not built yet.
+> **Status:** stage 2 of 4. Finding the steps, measuring flow efficiency, and spotting bottlenecks and waste all work. The process diagram and redesign proposals are not built yet.
 
 It runs on your own machine and costs nothing. You bring your own free API key.
 
@@ -33,8 +33,13 @@ Then open **http://localhost:3000**.
 
 1. Describe the process: who does what, how long each part takes, and where things wait.
 2. Press **Analyse**.
-3. Read the result: flow efficiency, then a table of steps with their working time and waiting time.
+3. Read the result, top to bottom:
+   - **Flow efficiency**: the share of total time that is actual work.
+   - **Waste**: recoverable minutes in each of the eight Lean waste categories. A dash means none was found.
+   - **Steps**: every step with its working and waiting time. Bottlenecks are marked on the step where they occur, with a thick left edge and the evidence behind them.
 4. Press **Download JSON** to keep it. Nothing is saved, so refreshing the page clears the result.
+
+The steps appear first. Bottlenecks and waste follow in a second request. If that part fails, the steps stay on screen and you can press **Retry diagnosis**.
 
 Press **Show worked example** to see a finished result without a key.
 
@@ -42,13 +47,16 @@ Press **Show worked example** to see a finished result without a key.
 
 ## Limits of the free setup
 
-- **50 analyses a day** per OpenRouter account. Adding $10 of credit raises this to 1,000.
-- **Free models sometimes get it wrong.** The most common mistake is missing the waiting time, which makes flow efficiency read 100%. When a result looks like that, the app shows a **Check this result** warning. Run it again, add more detail, or type a paid model name into the **Model** field. Paid models need credit on your account.
+- **About 25 analyses a day** per OpenRouter account. Free keys are capped at 50 requests a day, and each analysis makes two: one for the steps, one for bottlenecks and waste. Retries count too. Adding $10 of credit raises the cap to 1,000 requests.
+- **Free models sometimes get it wrong.**
+  - The most common mistake is missing the waiting time, which makes flow efficiency read 100%. The app shows a **Check this result** warning.
+  - Finding bottlenecks and waste fails more often than finding the steps. Press **Retry diagnosis**. When the findings contain figures that can't be true, the app shows **Check these findings**.
+  - Paid models do markedly better. Type a paid model name into the **Model** field. Paid models need credit on your account.
 - **Descriptions up to 8,000 characters**, about 1,200 words.
 
 ## Privacy
 
-- **Your key** stays in the browser tab. It is sent with each analysis and never stored or logged by the app. Closing the tab clears it.
+- **Your key** stays in the browser tab. It is sent with each request and never stored or logged by the app. Closing the tab clears it.
 - **Your description** goes to OpenRouter and on to whichever company runs the model. On free models, that company may use it for training. **Don't describe anything confidential while using a free model.**
 - **Nothing is saved.** No database, no accounts. Results exist only on your screen and in the files you download.
 
@@ -57,21 +65,23 @@ Press **Show worked example** to see a finished result without a key.
 | You see | What it means | What to do |
 |---|---|---|
 | `key rejected` | The key is wrong or was deleted | Create a new key and paste it again |
-| `rate limited — free models are shared and capped per day` | You've used today's 50 analyses, or the free model is busy | Try again later, or tomorrow |
+| `rate limited — free models are shared and capped per day` | You've used today's 50 requests, or the free model is busy | Try again later, or tomorrow |
 | `request failed` | Can mean the free-model setting in step 3 is off | Check [openrouter.ai/settings/privacy](https://openrouter.ai/settings/privacy) |
 | `returned an empty response after 3 attempts` | The free model is overloaded | Wait a minute and try again |
 | `does not match the schema` | The model returned something unusable | Run it again |
-| **Check this result** | The result is probably missing information | Run it again, or add more detail about waiting |
+| **Check this result** | The steps are probably missing information | Run it again, or add more detail about waiting |
+| **Bottlenecks and waste not found** | The second request failed. The steps are unaffected | Press **Retry diagnosis** |
+| **Check these findings** | Some bottleneck or waste figures can't be true | Press **Retry diagnosis**, or use a paid model |
 
 ## For developers
 
 ```bash
-npm test        # 33 offline tests, no key or network needed
+npm test        # offline tests, no key or network needed
 npm run lint
 npm run build
 ```
 
-- `app/api/extract/route.ts`: the one server endpoint
+- `app/api/extract/route.ts` and `app/api/diagnose/route.ts`: the two server endpoints, one per stage
 - `lib/callModel.ts`: the only code that talks to an AI provider
 - `lib/schema.ts`: the data shape, and the checks every result must pass
 - `lib/quality.ts`: flags results that pass the checks but look implausible

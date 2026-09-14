@@ -83,13 +83,20 @@ Do not add a database, auth, or state library until explicitly asked. A complete
 
 ## Current state
 
-Stage 1 works end to end: prose in, validated steps and flow efficiency out, through `POST /api/extract`. Default provider is OpenRouter on a free model. Stages 2–4 not started.
+Stages 1 and 2 work end to end. Stage 1 (`POST /api/extract`) turns prose into validated steps and flow efficiency. Stage 2 (`POST /api/diagnose`) turns those steps into bottlenecks and DOWNTIME waste, validated with `diagnoseResultSchemaFor` so every finding points at a real step and no step carries two bottlenecks. The UI starts stage 2 only once stage 1 is on screen; a failed diagnosis shows a retry and never hides the steps. Default provider is OpenRouter on a free model. Stages 3–4 not started.
+
+Request handling shared by stage routes lives in `lib/routeInput.ts`. Add new stage routes through it rather than re-validating provider fields by hand.
 
 ## Cost constraint — strictly free
 
 The project stays free to run. Do not change the default to a paid model or add anything that needs one.
 
-Known consequence: free models sometimes return valid JSON with every wait time set to zero, which reads as 100% flow efficiency. The schema cannot catch this — it checks shape, not sense. `lib/quality.ts` flags it, and the UI tells the user that a paid model, entered in the Model field, gives better results. Free OpenRouter keys are capped at 50 requests a day.
+Known consequences:
+
+- Free models sometimes return valid JSON with every wait time set to zero, which reads as 100% flow efficiency. The schema cannot catch this — it checks shape, not sense. `lib/quality.ts` flags it, and the UI tells the user that a paid model, entered in the Model field, gives better results.
+- Stage 2 fails on the free model far more often than stage 1: empty responses, invented enum values, and findings that double-count the same minutes. That is why diagnosis has its own retry and its own plausibility checks.
+- A single free diagnosis has taken over 40 seconds, against `callModel`'s 50-second per-attempt timeout. That timeout was set for Vercel's 60-second function limit.
+- Free OpenRouter keys are capped at 50 requests a day. A full analysis makes two, more with retries, so roughly 25 analyses.
 
 ## Framework notes
 

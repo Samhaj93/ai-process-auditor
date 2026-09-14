@@ -185,6 +185,49 @@ export const DiagnoseResultSchema = z.object({
 });
 export type DiagnoseResult = z.infer<typeof DiagnoseResultSchema>;
 
+/**
+ * Stage 2 validation for one request. On top of the shape, every step id the
+ * result mentions must exist in the steps it was given, and no step may carry
+ * two bottlenecks, since the UI marks a bottleneck on the step's own row.
+ *
+ * Built per request because the valid ids differ per process. .superRefine
+ * returns a new schema, so the shared DiagnoseResultSchema is never modified;
+ * tests/diagnose.test.ts guards that.
+ */
+export function diagnoseResultSchemaFor(steps: ProcessStep[]) {
+  const ids = new Set(steps.map((s) => s.id));
+  return DiagnoseResultSchema.superRefine((result, ctx) => {
+    const marked = new Set<string>();
+    for (const [i, b] of result.bottlenecks.entries()) {
+      if (!ids.has(b.stepId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["bottlenecks", i, "stepId"],
+          message: `references unknown step id "${b.stepId}"`,
+        });
+      } else if (marked.has(b.stepId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["bottlenecks", i, "stepId"],
+          message: `second bottleneck on step "${b.stepId}"`,
+        });
+      }
+      marked.add(b.stepId);
+    }
+    for (const [i, w] of result.wastes.entries()) {
+      for (const [j, id] of w.stepIds.entries()) {
+        if (!ids.has(id)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["wastes", i, "stepIds", j],
+            message: `references unknown step id "${id}"`,
+          });
+        }
+      }
+    }
+  });
+}
+
 /** Derive metrics from steps. Never let the model compute these. */
 export function computeMetrics(steps: ProcessStep[]): ProcessMetrics {
   const processTimeMinutes = steps.reduce((n, s) => n + s.processMinutes, 0);
