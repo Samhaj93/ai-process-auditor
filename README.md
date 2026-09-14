@@ -66,7 +66,8 @@ Press **Show worked example** to see a finished result without a key.
 |---|---|---|
 | `key rejected` | The key is wrong or was deleted | Create a new key and paste it again |
 | `rate limited — free models are shared and capped per day` | You've used today's 50 requests, or the free model is busy | Try again later, or tomorrow |
-| `request failed` | Can mean the free-model setting in step 3 is off | Check [openrouter.ai/settings/privacy](https://openrouter.ai/settings/privacy) |
+| `free models are switched off in your OpenRouter privacy settings` | The setting in step 3 is off | Turn it on at [openrouter.ai/settings/privacy](https://openrouter.ai/settings/privacy) |
+| `request failed` | Something else went wrong with the request | Try again. If it keeps happening, check the model name in the **Model** field |
 | `returned an empty response after 3 attempts` | The free model is overloaded | Wait a minute and try again |
 | `does not match the schema` | The model returned something unusable | Run it again |
 | **Check this result** | The steps are probably missing information | Run it again, or add more detail about waiting |

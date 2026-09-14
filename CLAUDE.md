@@ -68,7 +68,7 @@ Celonis-referenced: dense, data-forward, calm. The screen is an instrument panel
 
 ## Stack
 
-Next.js (App Router) · TypeScript · Tailwind · `zod` for runtime schema validation · `bpmn-js` for BPMN rendering · deployed on Vercel.
+Next.js (App Router) · TypeScript · Tailwind · `zod` for runtime schema validation · `bpmn-js` for BPMN rendering · run locally by each user with `npm run dev`. There is no hosted deployment, so there is no serverless time limit to design around.
 
 Do not add a database, auth, or state library until explicitly asked. A completed audit lives in React state and can be downloaded as JSON.
 
@@ -95,7 +95,7 @@ Known consequences:
 
 - Free models sometimes return valid JSON with every wait time set to zero, which reads as 100% flow efficiency. The schema cannot catch this — it checks shape, not sense. `lib/quality.ts` flags it, and the UI tells the user that a paid model, entered in the Model field, gives better results.
 - Stage 2 fails on the free model far more often than stage 1: empty responses, invented enum values, and findings that double-count the same minutes. That is why diagnosis has its own retry and its own plausibility checks.
-- A single free diagnosis has taken over 40 seconds, against `callModel`'s 50-second per-attempt timeout. That timeout was set for Vercel's 60-second function limit.
+- A single free diagnosis has taken over 40 seconds. `callModel` allows 120 seconds per attempt and up to three attempts, so in the worst case a user waits several minutes before seeing an error.
 - Free OpenRouter keys are capped at 50 requests a day. A full analysis makes two, more with retries, so roughly 25 analyses.
 
 ## Framework notes

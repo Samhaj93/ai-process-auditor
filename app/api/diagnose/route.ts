@@ -9,8 +9,6 @@ import {
   type DiagnoseResult,
 } from "@/lib/schema";
 
-export const maxDuration = 60;
-
 export async function POST(request: Request) {
   const payload = await readJsonObject(request);
   if (!payload) return errorResponse(["Request body must be a JSON object."]);

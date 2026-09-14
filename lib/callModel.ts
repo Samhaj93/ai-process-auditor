@@ -71,8 +71,13 @@ export class ModelError extends Error {
   }
 }
 
-/** Under the route's maxDuration, so a hang is our error rather than a platform 504. */
-const TIMEOUT_MS = 50_000;
+/**
+ * Per attempt. Long enough for a slow free model (a single diagnosis has taken
+ * 43 seconds) but short enough that a hung provider surfaces as an error
+ * rather than a spinner that never ends. The app runs locally, so there is no
+ * serverless time limit to stay under.
+ */
+const TIMEOUT_MS = 120_000;
 
 /**
  * Free endpoints intermittently return an empty body or a 429 with nothing
@@ -156,12 +161,16 @@ export async function callModel<T>(opts: CallOptions): Promise<T> {
     }
 
     if (!res.ok) {
-      // Deliberately does not echo the response body — it can contain the key.
+      // The response body is never echoed — it can contain the key. A 404 body
+      // is only searched for one known phrase, and a fixed message shown instead.
       if (res.status === 429 && attempt < MAX_ATTEMPTS) {
         lastProblem = "rate limited";
         await delay(RETRY_DELAY_MS * attempt);
         continue;
       }
+      // OpenRouter answers 404 "No endpoints found matching your data policy"
+      // when an account has free models switched off: the usual first-run failure.
+      const detail = res.status === 404 ? await res.text().catch(() => "") : "";
       const hint =
         res.status === 401
           ? "key rejected"
@@ -169,7 +178,9 @@ export async function callModel<T>(opts: CallOptions): Promise<T> {
             ? "rate limited — free models are shared and capped per day. Wait a little, or add credit to raise the cap"
             : res.status === 402
               ? "out of credit"
-              : "request failed";
+              : /data policy/i.test(detail)
+                ? "free models are switched off in your OpenRouter privacy settings. Turn them on at openrouter.ai/settings/privacy"
+                : "request failed";
       throw new ModelError(`${cfg.label}: ${hint}`, res.status);
     }
 

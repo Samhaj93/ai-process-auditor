@@ -13,19 +13,22 @@ const base = {
 };
 
 /** Queue of canned responses, consumed one per fetch call. */
-function stubFetch(queue: Array<{ status?: number; content?: string }>) {
+function stubFetch(queue: Array<{ status?: number; content?: string; error?: string }>) {
   let calls = 0;
   globalThis.fetch = (async () => {
     const next = queue[Math.min(calls, queue.length - 1)];
     calls++;
     const status = next.status ?? 200;
+    const payload = {
+      choices: [{ message: { content: next.content ?? "" } }],
+      // Upstream error bodies can echo request details, including the key.
+      error: { message: next.error ?? `upstream said ${SECRET}` },
+    };
     return {
       ok: status >= 200 && status < 300,
       status,
-      json: async () => ({
-        choices: [{ message: { content: next.content ?? "" } }],
-        error: { message: `upstream said ${SECRET}` },
-      }),
+      json: async () => payload,
+      text: async () => JSON.stringify(payload),
     } as unknown as Response;
   }) as typeof fetch;
   return () => calls;
@@ -87,8 +90,36 @@ describe("callModel", () => {
     );
   });
 
+  // The first failure most new users hit: a fresh OpenRouter account with free
+  // models switched off in its privacy settings.
+  it("says which setting to change when free models are switched off", async () => {
+    stubFetch([
+      { status: 404, error: `No endpoints found matching your data policy (${SECRET})` },
+    ]);
+    await assert.rejects(
+      () => callModel(base),
+      (err: ModelError) => {
+        assert.match(err.message, /openrouter\.ai\/settings\/privacy/);
+        assert.ok(!err.message.includes(SECRET));
+        assert.equal(err.status, 404);
+        return true;
+      },
+    );
+  });
+
+  it("does not mistake an unrelated 404 for the privacy setting", async () => {
+    stubFetch([{ status: 404, error: "Model not found" }]);
+    await assert.rejects(
+      () => callModel(base),
+      (err: ModelError) => {
+        assert.doesNotMatch(err.message, /privacy/);
+        return true;
+      },
+    );
+  });
+
   it("never puts the key in an error, even when upstream echoes it", async () => {
-    for (const status of [400, 402, 429, 500]) {
+    for (const status of [400, 402, 404, 429, 500]) {
       stubFetch([{ status }]);
       await assert.rejects(
         () => callModel(base),
@@ -106,7 +137,7 @@ describe("callModel", () => {
     await assert.rejects(
       () => callModel(base),
       (err: ModelError) => {
-        assert.match(err.message, /timed out after 50s/);
+        assert.match(err.message, /timed out after 120s/);
         return true;
       },
     );

@@ -9,9 +9,6 @@ import {
   type ExtractResult,
 } from "@/lib/schema";
 
-/** Node functions default to 10s. Extraction on real prose can exceed that. */
-export const maxDuration = 60;
-
 export async function POST(request: Request) {
   const payload = await readJsonObject(request);
   if (!payload) return errorResponse(["Request body must be a JSON object."]);
